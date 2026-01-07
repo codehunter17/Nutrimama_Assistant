@@ -1,0 +1,39 @@
+# Nutrimama Assistant - Requirements
+
+# Core dependencies
+python>=3.9
+
+# Data processing & ML (future)
+numpy>=1.21.0
+pandas>=1.3.0
+
+# ML Models (future CatBoost integration)
+catboost>=1.0.0
+
+# NLP (future: can replace with transformers if needed)
+# For now, using simple regex-based NLP
+
+# Logging & monitoring
+python-logging-loki>=0.3.2
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+
+# Code quality
+black>=22.0.0
+flake8>=4.0.0
+mypy>=0.950
+
+# API/Web (future)
+# fastapi>=0.79.0
+# uvicorn>=0.18.0
+# pydantic>=1.9.0
+
+# Database (future)
+# sqlalchemy>=1.4.0
+# psycopg2-binary>=2.9.0
+
+# LLM integration (future)
+# openai>=0.27.0
+# or: transformers>=4.20.0
