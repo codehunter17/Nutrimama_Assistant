@@ -5,6 +5,7 @@ This project uses LLMs only for phrasing and tone — not for decisions.
 - `app/llm_client.py` provides a pluggable client. By default it uses `LocalMockClient`.
 - If `OPENAI_API_KEY` is set and `openai` is installed, `OpenAIClient` will be used.
 - The Responder (`app/interface/responder.py`) calls the LLM only after a safety check via `SafetyChecker`.
+- Responder accepts LLM-polished output if it passes a basic non-echo check (it must not contain prompt-template text). Short one-line polishes are allowed — the responder no longer requires a blank-line structure.
 - All LLM calls are stochastic; the system uses deterministic templates as a fallback to ensure consistent behavior and testability.
 
 Environment variables:
