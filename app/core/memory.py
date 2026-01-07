@@ -264,6 +264,36 @@ class Memory:
             "last_updated": self.last_updated.isoformat()
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict) -> "Memory":
+        """Reconstruct Memory object from persisted dict."""
+        user_id = data.get("user_id", "unknown")
+        m = cls(user_id)
+        actions = data.get("actions", [])
+        for a in actions:
+            try:
+                m.actions.append(Action.from_dict(a))
+            except Exception:
+                logger.exception("Failed to load action from dict")
+
+        m.failed_suggestions = data.get("failed_suggestions", {})
+        m.successful_suggestions = data.get("successful_suggestions", {})
+        m.dislikes = set(data.get("dislikes", []))
+        m.allergies = set(data.get("allergies", []))
+        m.contraindications = set(data.get("contraindications", []))
+
+        # Timestamps
+        try:
+            from datetime import datetime
+            if data.get("created_at"):
+                m.created_at = datetime.fromisoformat(data["created_at"])
+            if data.get("last_updated"):
+                m.last_updated = datetime.fromisoformat(data["last_updated"])
+        except Exception:
+            logger.exception("Failed to parse timestamps when loading memory")
+
+        return m
+
     def get_summary(self) -> Dict:
         """Human-readable summary for debugging."""
         return {

@@ -31,6 +31,7 @@ from app.knowledge.nutrition import NutritionKnowledgeBase
 from app.models.predictors import PredictorSuite, DummyNutrientPredictor
 from app.models.registry import ModelRegistry, ModelMetadata
 from app.interface.responder import Responder
+from app.storage import load_user_state, save_user_state
 
 
 # Setup logging
@@ -58,8 +59,14 @@ class Nutrimama:
         logger.info(f"Initializing Nutrimama for user: {user_id}")
 
         # Core brain
-        self.state = MaternalBrainState()
-        self.memory = Memory(user_id)
+        # Try to load persisted state & memory
+        loaded = load_user_state(user_id)
+        if loaded:
+            self.state, self.memory = loaded
+            logger.info(f"Loaded persisted state and memory for {user_id}")
+        else:
+            self.state = MaternalBrainState()
+            self.memory = Memory(user_id)
         self.reasoning = ReasoningEngine()
         self.safety = SafetyChecker()
 
@@ -142,6 +149,12 @@ class Nutrimama:
             nutrients_targeted=action_details.get("nutrients_targeted", [])
         )
 
+        # Persist after logging an action
+        try:
+            save_user_state(self.user_id, self.state, self.memory)
+        except Exception:
+            logger.exception("Failed to save user state after logging action")
+
         # Step 9: Generate warm response
         response = self.responder.respond_to_action(
             action_type.value, action_details, self.state
@@ -190,6 +203,15 @@ class Nutrimama:
         # Find matching action in memory
         # For now, just record the feedback
         # In real system, would match to actual action_id
+        action_id = feedback.get("action_id")
+        outcome = feedback.get("outcome")
+        if action_id and outcome:
+            recorded = self.memory.record_outcome(action_id, outcome, feedback.get("text"))
+            if recorded:
+                try:
+                    save_user_state(self.user_id, self.state, self.memory)
+                except Exception:
+                    logger.exception("Failed to save user state after recording feedback")
 
     def get_state_summary(self) -> dict:
         """Get current state summary (for UI/debugging)."""

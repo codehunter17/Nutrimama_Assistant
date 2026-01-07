@@ -241,3 +241,49 @@ class MaternalBrainState:
             f"MaternalBrainState(stage={self.pregnancy_stage}, "
             f"energy={self.energy_level:.2f}, {nutrients_str})"
         )
+
+    def to_dict(self) -> Dict:
+        """Serialize state to a plain dict for persistence."""
+        return {
+            "nutrition": self.nutrition.copy(),
+            "energy_level": self.energy_level,
+            "hydration_level": self.hydration_level,
+            "sleep_quality": self.sleep_quality,
+            "stress_level": self.stress_level,
+            "pregnancy_stage": self.pregnancy_stage,
+            "breastfeeding": self.breastfeeding,
+            "age": self.age,
+            "symptoms": list(self.symptoms),
+            "confidence_in_state": self.confidence_in_state.copy(),
+            "last_action": self.last_action,
+            "last_action_date": self.last_action_date.isoformat() if self.last_action_date else None,
+            "created_at": self.created_at.isoformat(),
+            "last_updated": self.last_updated.isoformat(),
+            "update_count": self.update_count
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "MaternalBrainState":
+        """Deserialize state from dict."""
+        obj = cls(pregnancy_stage=data.get("pregnancy_stage"), breastfeeding=data.get("breastfeeding", False), age=data.get("age"))
+        obj.nutrition = data.get("nutrition", obj.nutrition)
+        obj.energy_level = data.get("energy_level", obj.energy_level)
+        obj.hydration_level = data.get("hydration_level", obj.hydration_level)
+        obj.sleep_quality = data.get("sleep_quality", obj.sleep_quality)
+        obj.stress_level = data.get("stress_level", obj.stress_level)
+        obj.symptoms = set(data.get("symptoms", []))
+        obj.confidence_in_state = data.get("confidence_in_state", obj.confidence_in_state)
+        obj.last_action = data.get("last_action")
+        import datetime
+
+        lad = data.get("last_action_date")
+        if lad:
+            try:
+                obj.last_action_date = datetime.datetime.fromisoformat(lad)
+            except Exception:
+                obj.last_action_date = None
+
+        obj.created_at = datetime.datetime.fromisoformat(data.get("created_at")) if data.get("created_at") else obj.created_at
+        obj.last_updated = datetime.datetime.fromisoformat(data.get("last_updated")) if data.get("last_updated") else obj.last_updated
+        obj.update_count = data.get("update_count", obj.update_count)
+        return obj

@@ -243,5 +243,14 @@ class SafetyChecker:
         """Clear recorded alerts."""
         self.alerts = []
 
+    def is_prompt_safe(self, prompt: str) -> bool:
+        """Quick heuristic to ensure prompts sent to LLM won't request medical advice
+        or contain risky instructions. This is intentionally conservative."""
+        lower = prompt.lower()
+        medical_kws = ["treat", "cure", "medicine", "dose", "prescribe", "diagnos"]
+        if any(kw in lower for kw in medical_kws):
+            return False
+        return True
+
     def __repr__(self) -> str:
         return f"SafetyChecker(violations={len(self.violations)}, alerts={len(self.alerts)})"
