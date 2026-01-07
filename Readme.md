@@ -39,3 +39,5 @@ nutrimama/
     ├── raw/
     ├── processed/
     └── user_states/
+
+Note: Backup helpers and CLI are provided for Google Drive and OneDrive. See `docs/backup.md` and `docs/onedrive.md` for usage and security guidance.
