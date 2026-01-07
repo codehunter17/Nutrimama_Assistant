@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# IDEs
+.vscode/
+.idea/
+
+# Test output
+.pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets & local data
+.env
+data/
+
+# Logs
+*.log
+
+# Pipenv
+Pipfile.lock
+
+# Temporary
+*.tmp
+
+# Coverage
+.coverage
+htmlcov/
+
+# GitHub actions artifacts
+.github/workflows/*.yml
+
+# Ignore compiled caches
+*/__pycache__/
+*.egg-info/
+
+# Node
+node_modules/
