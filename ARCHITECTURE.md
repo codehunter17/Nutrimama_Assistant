@@ -190,6 +190,12 @@ class ReasoningEngine:
 - **State third** (what's the actual problem?)
 - **Pure logic** (no black boxes)
 
+**Recent improvements (2026-01-08)**:
+- Deterministic nutrient selection: nutrients are evaluated and ranked by urgency (lowest confidence-weighted score first) to avoid non-deterministic dict iteration ordering. 🔧
+- Iterative, non-recursive food candidate selection: the engine tries prioritized candidates (successful patterns first) and performs safety checks iteratively to avoid recursion and ensure termination. ✅
+- Unit test coverage added for reasoning, safety, and state serialization (see `tests/test_reasoning.py`, `tests/test_safety.py`, `tests/test_state.py`). 📋
+- These changes improve reproducibility, testability, and reduce risk of accidental infinite recursion from safety rule interactions.
+
 ---
 
 #### **safety.py** - Hard Boundaries

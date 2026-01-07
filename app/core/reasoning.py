@@ -122,26 +122,34 @@ class ReasoningEngine:
     def _find_pressing_nutrient(self, state) -> Optional[str]:
         """
         Which nutrient is most pressing?
-        
-        Priority:
-        1. Critical nutrients we're confident about
-        2. Low nutrients trending down
+
+        Priority (deterministic):
+        1. Any nutrient below CRITICAL_THRESHOLD with high confidence (sorted lowest first)
+        2. Any nutrient between CRITICAL and LOW thresholds with high confidence (sorted lowest first)
         3. Return None if all adequate
         """
-        critical = [
-            n for n, v in state.nutrition.items()
-            if v < self.CRITICAL_THRESHOLD and state.confidence_in_state[n] > 0.7
+        items = [
+            (n, v) for n, v in state.nutrition.items()
+            if state.confidence_in_state.get(n, 0.0) > 0.7
         ]
-        if critical:
-            return critical[0]
+        if not items:
+            return None
 
-        low = [
-            n for n, v in state.nutrition.items()
-            if self.CRITICAL_THRESHOLD <= v < self.LOW_THRESHOLD
-            and state.confidence_in_state[n] > 0.7
-        ]
+        # Consider critical nutrients first (deterministic by value)
+        critical = sorted(
+            [(n, v) for n, v in items if v < self.CRITICAL_THRESHOLD],
+            key=lambda x: x[1]
+        )
+        if critical:
+            return critical[0][0]
+
+        # Then low nutrients
+        low = sorted(
+            [(n, v) for n, v in items if self.CRITICAL_THRESHOLD <= v < self.LOW_THRESHOLD],
+            key=lambda x: x[1]
+        )
         if low:
-            return low[0]
+            return low[0][0]
 
         return None
 
@@ -154,57 +162,50 @@ class ReasoningEngine:
     ) -> Tuple[ActionType, Dict, str]:
         """
         Suggest a food to address this nutrient.
-        Uses memory to pick foods that worked before.
+        Uses memory to pick foods that worked before. Tries candidates
+        iteratively and performs safety checks without recursion to avoid
+        potential infinite loops.
         """
-        # Get foods that previously worked for this nutrient
+        # Get foods that previously worked for this nutrient (sorted by success)
         successful = memory.get_successful_patterns()
         foods_for_nutrient = self._get_foods_for_nutrient(nutrient)
 
-        # Prioritize: foods that worked before
-        best_food = None
-        for food, success_count in successful:
-            if food in foods_for_nutrient:
-                if not memory.should_avoid_suggestion(food):
-                    if not memory.was_recently_suggested(food):
-                        best_food = food
-                        break
+        # Build deterministic candidate list: successful first (by count desc), then remaining foods
+        successful_foods = [f for f, _ in successful if f in foods_for_nutrient]
+        remaining_foods = [f for f in foods_for_nutrient if f not in successful_foods]
+        candidates = successful_foods + remaining_foods
 
-        # If no prior success, try a safe food
-        if not best_food:
-            for food in foods_for_nutrient:
-                if not memory.should_avoid_suggestion(food):
-                    if not memory.was_recently_suggested(food):
-                        best_food = food
-                        break
+        for food in candidates:
+            # Respect memory constraints
+            if memory.should_avoid_suggestion(food):
+                continue
+            if memory.was_recently_suggested(food):
+                continue
 
-        if not best_food:
-            # All foods have been tried, suggest check-in
+            # Safety check
+            is_safe, reason = safety.check_food_safety(
+                food, state.pregnancy_stage, state.breastfeeding
+            )
+            if not is_safe:
+                logger.warning(f"Food {food} failed safety check: {reason}")
+                continue
+
+            # Found a safe candidate
             return (
-                ActionType.CHECK_IN,
-                {"question": f"How have you been feeling about your {nutrient} intake?"},
-                f"Already tried common {nutrient} sources. Need user feedback."
+                ActionType.SUGGEST_FOOD,
+                {
+                    "nutrient": nutrient,
+                    "food": food,
+                    "reason": f"Your {nutrient} levels seem low"
+                },
+                f"Suggesting {food} to address {nutrient}"
             )
 
-        # Safety check the food
-        is_safe, reason = safety.check_food_safety(
-            best_food,
-            state.pregnancy_stage,
-            state.breastfeeding
-        )
-
-        if not is_safe:
-            # Try next best food
-            logger.warning(f"Food {best_food} failed safety check: {reason}")
-            return self._suggest_for_nutrient(nutrient, state, memory, safety)
-
+        # No safe/valid candidates found
         return (
-            ActionType.SUGGEST_FOOD,
-            {
-                "nutrient": nutrient,
-                "food": best_food,
-                "reason": f"Your {nutrient} levels seem low"
-            },
-            f"Suggesting {best_food} to address {nutrient}"
+            ActionType.CHECK_IN,
+            {"question": f"How have you been feeling about your {nutrient} intake?"},
+            f"No safe/valid food candidates for {nutrient}. Need user feedback."
         )
 
     def _suggest_lifestyle(
