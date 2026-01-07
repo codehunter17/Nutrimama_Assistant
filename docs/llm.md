@@ -44,4 +44,42 @@ else:
 
 If you decide to use LangChain, install it explicitly in your environment. Do NOT add it to core runtime dependencies unless you plan to use it across the system; keep it opt-in and well-contained.
 
+### Operator Guide: wiring LangChain + OpenAI (example)
+
+If you intend to use LangChain for templating and observability in production, follow these steps (example using OpenAI):
+
+1. Install packages into the runtime environment (opt-in):
+
+```bash
+pip install langchain openai
+```
+
+2. Provide the OpenAI key as an environment variable (or other secret store):
+
+- `OPENAI_API_KEY` — set in the environment or secret manager used by your deployment platform (do NOT commit this to source).
+
+3. Create and inject a LangChain client into the adapter during application initialization (example):
+
+```py
+# bootstrap.py (example)
+from langchain.llms import OpenAI
+from app.llm_langchain_adapter import LangChainAdapter
+
+adapter = LangChainAdapter()
+if adapter.available:
+    llm_client = OpenAI(temperature=0)
+    adapter.set_client(llm_client)
+
+# Pass `adapter` to your Responder or make it available via DI
+```
+
+4. Important operational notes:
+- Keep prompt templates conservative and run all prompts through `SafetyChecker.is_prompt_safe()` (the adapter enforces this by default).
+- Instrument and log LLM usage (tokens, latency, prompt hashes) for cost/audit tracking.
+- Perform manual integration tests using the provided manual CI job (see below).
+
+### CI: Opt-in LangChain integration job
+
+A manual GitHub Actions job is available to run LangChain integration tests (`.github/workflows/langchain-integration.yml`). This job only runs when manually dispatched with `run: yes` and requires the `OPENAI_API_KEY` to be added to the repository secrets. This keeps LangChain integration testing opt-in and prevents accidental use of secrets in ordinary CI runs.
+
 *** End Patch
