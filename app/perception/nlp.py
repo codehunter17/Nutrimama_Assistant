@@ -118,37 +118,47 @@ class NLPParser:
             return "neutral"
 
     def _extract_nutrients(self, text: str) -> List[str]:
-        """Find nutrient mentions in the text."""
+        """Find nutrient mentions in the text (return list of nutrient keys)."""
         nutrients = []
-        
+
         for nutrient, keywords in self.NUTRIENT_KEYWORDS.items():
             for keyword in keywords:
-                if keyword.lower() in text:
+                if re.search(rf"\b{re.escape(keyword.lower())}\b", text):
                     nutrients.append(nutrient)
                     break
-        
+
         return nutrients
 
     def _detect_intent(self, text: str, symptoms: List[str], nutrients: List[str]) -> str:
-        """Infer what the user is trying to communicate."""
-        
+        """Infer user intent with more granular categories."""
+
+        # Feedback/outcome reporting
+        if re.search(r"\b(tried|had|ate|took|drank)\b", text) and re.search(r"\b(great|good|better|helped|didn't|did not|worse|bad)\b", text):
+            if re.search(r"\b(great|good|better|helped|helpful)\b", text):
+                return "give_feedback_positive"
+            else:
+                return "give_feedback_negative"
+
         # Symptoms mentioned → reporting symptoms
         if symptoms:
-            if "worked" in text or "helped" in text or "better" in text:
-                return "give_feedback_positive"
-            elif "didn't work" in text or "didn't help" in text or "worse" in text:
-                return "give_feedback_negative"
-            else:
-                return "report_symptom"
-        
-        # "Did you mean..." or "what..." → asking question
-        if re.search(r"(what|why|how|do you|can you|should|could)", text):
+            return "report_symptom"
+
+        # Requesting a suggestion explicitly
+        if re.search(r"\b(can you suggest|suggest|recommend|what should i|what can i)\b", text):
+            return "request_suggestion"
+
+        # Asking question
+        if re.search(r"\b(what|why|how|do you|can you|should|could|is it)\b", text):
             return "ask_question"
-        
+
         # Nutrients mentioned → discussing nutrition
         if nutrients:
             return "discuss_nutrition"
-        
+
+        # Greetings / small talk
+        if re.match(r"\s*(hi|hello|hey|good morning|good evening)\b", text):
+            return "greeting"
+
         # Default
         return "general_chat"
 
@@ -158,55 +168,56 @@ class NLPParser:
         More signals = higher confidence.
         """
         confidence = 0.5
-        
+
         if symptoms:
-            confidence += 0.2
+            confidence += 0.25
         if sentiment != "neutral":
             confidence += 0.15
         if nutrients:
             confidence += 0.15
-        
-        return min(1.0, confidence)
+
+        # Cap confidence to 0.95 to leave room for uncertainty in rule-based parsing
+        return min(0.95, confidence)
 
     def extract_feedback_target(self, user_input: str) -> Optional[str]:
         """
-        If user says "The spinach suggestion was great",
-        extract "spinach" as the target of feedback.
+        If user says "The spinach suggestion was great", extract the food target.
+        Supports multi-word food names.
         """
-        # Look for: "the X suggestion", "eating X", "tried X", "X was...", "about X"
-        pattern = r"(the |tried |eating |about |taking |having )?(\w+)( .*?(suggestion|idea|tip|recommendation|food|drink))?(.*(great|good|bad|terrible|didn't work|helped|worked))"
-        
-        match = re.search(pattern, user_input.lower())
-        if match:
-            return match.group(2)
-        
+        # Look for common patterns around feedback
+        patterns = [
+            r"\b(?:the )?(?P<food>[a-z\s_\-]+?) (?:suggestion|idea|tip|recommendation|food|drink)\b",
+            r"\b(?:i tried|i had|i ate|i took|i tried) (?P<food>[a-z\s_\-]+?) (?:and|,|\.| )",
+            r"\b(?:tried|ate|had) (?P<food>[a-z\s_\-]+?) and .*?(great|good|better|helped|didn't|did not|worse|bad)\b",
+        ]
+
+        text = user_input.lower()
+        for pat in patterns:
+            m = re.search(pat, text)
+            if m:
+                food = m.group("food").strip()
+                # sanitize: keep only alpha/space/hyphen
+                return re.sub(r"[^a-z\s\-]", "", food)
+
         return None
 
     def get_action_history_intent(self, user_input: str) -> Optional[Dict]:
         """
-        Parse if user is reporting outcome of a previous action.
-        E.g., "I tried spinach yesterday and felt great"
-        
-        Returns:
-            {"action": "spinach", "outcome": "positive", "when": "yesterday"}
-            or None if not an outcome report
+        Parse outcome reports such as "I tried spinach yesterday and felt great".
+
+        Returns a dict with keys: action (food), outcome (positive/negative), when (optional phrase)
         """
-        # Pattern: "I tried X and felt ..."
-        pattern = r"(tried|had|ate|took|drank)\s+(\w+).*?(great|good|bad|worse|better|better|helpful|didn't help)"
-        
-        match = re.search(pattern, user_input.lower())
-        if match:
-            action = match.group(2)
-            outcome_text = match.group(3)
-            
-            outcome = "positive" if outcome_text in ["great", "good", "better", "helpful"] else "negative"
-            
-            return {
-                "action": action,
-                "outcome": outcome,
-                "outcome_text": outcome_text
-            }
-        
+        pattern = r"(?:i (?:tried|had|ate|took|drank)|tried) (?P<food>[a-z\s_\-]+?)(?: (?:yesterday|today|this morning|last night))?(?: .*? (?P<outcome>great|good|better|helped|didn't|did not|worse|bad|poor|terrible))"
+        m = re.search(pattern, user_input.lower())
+        if m:
+            food = re.sub(r"[^a-z\s\-]", "", m.group("food")).strip()
+            outcome_text = m.group("outcome")
+            outcome = "positive" if outcome_text in ["great", "good", "better", "helped"] else "negative"
+            when = None
+            if re.search(r"yesterday|today|this morning|last night", user_input.lower()):
+                when = re.search(r"(yesterday|today|this morning|last night)", user_input.lower()).group(0)
+            return {"action": food, "outcome": outcome, "when": when}
+
         return None
 
     def __repr__(self) -> str:
